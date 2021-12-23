@@ -14,12 +14,12 @@ pub struct VecMap<K, V> {
 
 impl<K, V> VecMap<K, V> {
     pub fn keys                 (&    self) -> impl Iterator<Item = &    K> { self.keys.keys() }
-    pub fn values_by_name       (&    self) -> impl Iterator<Item = &    V> { self.iter_by_name().map(|(_k, v)| v) }
-    //pub fn values_by_name_mut   (&mut self) -> impl Iterator<Item = &mut V> { self.iter_mut().map(|(_k, v)| v) }
+    pub fn values_by_key        (&    self) -> impl Iterator<Item = &    V> { self.iter_by_key().map(|(_k, v)| v) }
+    //pub fn values_by_key_mut    (&mut self) -> impl Iterator<Item = &mut V> { self.iter_mut().map(|(_k, v)| v) }
     pub fn values_by_insert     (&    self) -> impl Iterator<Item = &    V> { self.values.iter() }
     pub fn values_by_insert_mut (&mut self) -> impl Iterator<Item = &mut V> { self.values.iter_mut() }
 
-    pub fn iter_by_name<'s>(&'s self) -> impl Iterator<Item = (&'s K, &'s V)> + 's {
+    pub fn iter_by_key<'s>(&'s self) -> impl Iterator<Item = (&'s K, &'s V)> + 's {
         let values = &self.values;
         self.keys.iter().map(move |(k, &idx)| (k, &values[idx]))
     }

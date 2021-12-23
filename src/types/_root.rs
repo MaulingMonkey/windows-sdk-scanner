@@ -27,15 +27,15 @@ pub struct Root {
 impl Debug for Root {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Root")
-            .field("interfaces",    &self.interfaces    .values_by_name().collect::<Vec<_>>())
-            .field("structs",       &self.structs       .values_by_name().collect::<Vec<_>>())
-            .field("unions",        &self.unions        .values_by_name().collect::<Vec<_>>())
-            .field("flags",         &self.flags         .values_by_name().collect::<Vec<_>>())
-            .field("macros",        &self.macros        .values_by_name().collect::<Vec<_>>())
-            .field("enums",         &self.enums         .values_by_name().collect::<Vec<_>>())
-            .field("constants",     &self.constants     .values_by_name().collect::<Vec<_>>())
-            .field("namespaces",    &self.namespaces    .values_by_name().collect::<Vec<_>>())
-            .field("functions",     &self.functions     .values_by_name().collect::<Vec<_>>())
+            .field("interfaces",    &self.interfaces    .values_by_key().collect::<Vec<_>>())
+            .field("structs",       &self.structs       .values_by_key().collect::<Vec<_>>())
+            .field("unions",        &self.unions        .values_by_key().collect::<Vec<_>>())
+            .field("flags",         &self.flags         .values_by_key().collect::<Vec<_>>())
+            .field("macros",        &self.macros        .values_by_key().collect::<Vec<_>>())
+            .field("enums",         &self.enums         .values_by_key().collect::<Vec<_>>())
+            .field("constants",     &self.constants     .values_by_key().collect::<Vec<_>>())
+            .field("namespaces",    &self.namespaces    .values_by_key().collect::<Vec<_>>())
+            .field("functions",     &self.functions     .values_by_key().collect::<Vec<_>>())
             .finish_non_exhaustive()
     }
 }
@@ -55,7 +55,7 @@ impl Root {
     }
 
     fn cleanup_inherited_methods(&mut self) {
-        for interface in self.interfaces.values_by_name() {
+        for interface in self.interfaces.values_by_key() {
             let mut next_base = &interface.base;
             while let Some(base) = next_base.as_ref().and_then(|base| self.interfaces.get(base)) {
                 for method in base.all_methods.keys().filter_map(|m| interface.all_methods.get(m)) {
