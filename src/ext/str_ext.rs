@@ -20,6 +20,11 @@ pub(crate) trait StrExt {
         None
     }
 
+    fn starts_with_token(&self, s: &str) -> bool {
+        let str = self.as_str();
+        str.starts_with(s) && str.is_ascii_word_boundary(s.len())
+    }
+
     fn is_ascii_word_boundary(&self, idx: usize) -> bool {
         let bytes = self.as_str().as_bytes();
         idx == 0 || idx == bytes.len() || (bytes[idx-1].is_ascii_word_character() != bytes[idx-0].is_ascii_word_character())
