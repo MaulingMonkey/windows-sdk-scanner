@@ -1,15 +1,18 @@
 // ...
 
 macro_rules! mods {
-    ( inl      mod $mod:ident ; $($tt:tt)* ) => {      mod $mod; #[allow(unused_imports)] pub use $mod::*; mods!( $($tt)* ); };
-    ( $vis:vis mod $mod:ident ; $($tt:tt)* ) => { $vis mod $mod; mods!( $($tt)* ); };
+    ( $( #[$attr:meta] )* inl      mod $mod:ident ;                $($tt:tt)* ) => { $(#[$attr])*      mod $mod;                       #[allow(unused_imports)] pub use $mod::*; mods!{ $($tt)* } };
+    ( $( #[$attr:meta] )* inl      mod $mod:ident { $($body:tt)* } $($tt:tt)* ) => { $(#[$attr])*      mod $mod { mods!{ $($body)* } } #[allow(unused_imports)] pub use $mod::*; mods!{ $($tt)* } };
+    ( $( #[$attr:meta] )* $vis:vis mod $mod:ident ;                $($tt:tt)* ) => { $(#[$attr])* $vis mod $mod;                                                                 mods!{ $($tt)* } };
+    ( $( #[$attr:meta] )* $vis:vis mod $mod:ident { $($body:tt)* } $($tt:tt)* ) => { $(#[$attr])* $vis mod $mod { mods!{ $($body)* } }                                           mods!{ $($tt)* } };
     () => {};
 }
 
 use cpp::*;
-/// Representations of C++ source code
-pub mod cpp {
-    mods! {
+
+mods! {
+    /// Representations of C++ source code
+    pub mod cpp {
         inl mod constant;
         inl mod enum_;
         inl mod field;
@@ -24,25 +27,17 @@ pub mod cpp {
         inl mod type_;
         inl mod union_;
     }
-}
 
-pub(crate) use ext::*;
-mod ext {
-    mods! {
+    inl mod ext {
         inl mod char_ext;
         inl mod str_ext;
     }
-}
 
-pub use types::*;
-mod types {
-    mods! {
+    inl mod types {
         inl mod _builder;
         inl mod _root;
     }
-}
 
-mods! {
     inl mod errors;
     inl mod location;
     pub mod sdk;
