@@ -1,11 +1,15 @@
 use crate::*;
 
+use std::collections::BTreeSet;
 use std::fmt::{self, Debug, Formatter};
 
 
 
 /// `void id();`
 pub struct Function {
+    /// Location(s) this function was defined at.
+    pub defined_at:             BTreeSet<Location>,
+
     /// The function name - e.g. might be `AddRef` or `Direct3DCreate9`.
     pub id:                     Ident,
 
@@ -28,7 +32,7 @@ pub enum FunctionAbi {
 
 impl Function {
     pub fn valid_name(name: &str) -> bool { valid_name(name) }
-    pub fn new(id: Ident) -> Self { Self { id, abi: FunctionAbi::Default, _non_exhaustive: () } }
+    pub fn new(id: Ident) -> Self { Self { defined_at: Default::default(), id, abi: FunctionAbi::Default, _non_exhaustive: () } }
 }
 
 impl Debug for Function {

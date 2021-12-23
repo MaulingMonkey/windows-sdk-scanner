@@ -150,14 +150,18 @@ impl Root {
         Ok(())
     }
 
-    fn add_interface(&mut self, loc: &Location, interface: Interface) {
+    fn add_interface(&mut self, loc: &Location, mut interface: Interface) {
         let path = &*loc.path;
         let line_no = loc.line_no_or_0();
 
         match self.interfaces.entry(interface.id.clone()) {
-            vec_map::Entry::Vacant(e) => drop(e.insert(interface)),
-            vec_map::Entry::Occupied(e) => {
-                let prev = e.get();
+            vec_map::Entry::Vacant(entry) => {
+                interface.defined_at.insert(loc.clone());
+                entry.insert(interface);
+            },
+            vec_map::Entry::Occupied(mut entry) => {
+                let prev = entry.get_mut();
+                prev.defined_at.insert(loc.clone());
                 let mut new_methods  = interface.methods().map(|m| m.f.id.as_str());
                 let mut prev_methods = prev     .methods().map(|m| m.f.id.as_str());
                 let interface = &interface.id;
@@ -177,13 +181,17 @@ impl Root {
         }
     }
 
-    fn add_function(&mut self, loc: &Location, function: Function) {
+    fn add_function(&mut self, loc: &Location, mut function: Function) {
         match self.functions.entry(function.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(function)),
-            vec_map::Entry::Occupied(entry) => {
-                let prev = entry.get();
+            vec_map::Entry::Vacant(entry) => {
+                function.defined_at.insert(loc.clone());
+                entry.insert(function);
+            },
+            vec_map::Entry::Occupied(mut entry) => {
+                let prev = entry.get_mut();
                 if function.abi != prev.abi { warning!(at: &loc.path, line: loc.line_no_or_0(), "duplicate function declaration for `{}` has varying ABI: {:?} vs {:?}", function.id, prev.abi, function.abi) }
                 // TODO: ret, params?
+                prev.defined_at.insert(loc.clone());
             },
         }
     }

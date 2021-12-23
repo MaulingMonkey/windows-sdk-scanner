@@ -2,6 +2,7 @@ use crate::*;
 
 use mmrbi::*;
 
+use std::collections::BTreeSet;
 use std::fmt::{self, Debug, Formatter};
 use std::io;
 
@@ -9,6 +10,9 @@ use std::io;
 
 /// `interface id : public base { ... }` or ...
 pub struct Interface {
+    /// Location(s) this interface was defined at.
+    pub defined_at:             BTreeSet<Location>,
+
     /// A class/interface name such as `IUnknown`.
     pub id:                     Ident,
 
@@ -39,6 +43,7 @@ impl Interface {
 
     pub fn new(id: Ident, base: Option<Ident>) -> Self {
         Self {
+            defined_at: Default::default(),
             id, base,
             all_methods: Default::default(),
             _non_exhaustive: ()
