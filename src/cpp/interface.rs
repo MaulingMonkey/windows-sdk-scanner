@@ -47,6 +47,11 @@ impl Interface {
 
     pub fn methods(&self) -> impl Iterator<Item = &Method> { self.all_methods.values_by_key().filter(|m| !m.is_inherited()) }
 
+    pub fn method(&self, name: impl AsRef<str>) -> Option<&Method> {
+        let m = self.all_methods.get(name.as_ref())?;
+        (!m.is_inherited()).then(|| m)
+    }
+
     pub(crate) fn add_from_cpp(&mut self, interface_start: &Location, src: &mut SrcReader) -> io::Result<()> {
         while let Some(SrcLine { location, trimmed, .. }) = src.next_line() {
             if trimmed == "" { continue }
