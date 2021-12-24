@@ -114,6 +114,7 @@ impl UnionData {
             })?
         }}
 
+        let mut warned_bitfields = false;
         let mut warned_subtype = false;
 
         'struct_: loop {
@@ -150,6 +151,16 @@ impl UnionData {
                 let token = expect_token!();
                 if token == ";" {
                     self.add_field(src.token_to_location(possible_name), Ident::from(ty), Ident::own(&*possible_name));
+                    continue 'struct_
+                } else if token == ":" {
+                    if !warned_bitfields {
+                        warned_bitfields = true;
+                        let loc = src.token_to_location(token);
+                        warning!(at: &loc.path, line: loc.line_no_or_0(), "bit fields not (yet?) supported");
+                        self.issues.push(Issue::new(loc, format!("bit fields not (yet?) supported")));
+                        self.add_field(src.token_to_location(possible_name), Ident::from(ty), Ident::own(&*possible_name));
+                    }
+                    while expect_token!() != ";" {}
                     continue 'struct_
                 } else {
                     if !ty.is_empty() { ty.push(' ') }
