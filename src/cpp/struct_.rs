@@ -114,6 +114,8 @@ impl StructData {
             })?
         }}
 
+        let mut warned_subtype = false;
+
         'struct_: loop {
             let mut token = expect_token!();
             while token == "#" {
@@ -126,7 +128,19 @@ impl StructData {
                 token = expect_token!();
             }
 
-            if token == "}" { break 'struct_ }
+            match &*token {
+                "}" => break 'struct_,
+                "enum" | "struct" | "union" => {
+                    if !warned_subtype {
+                        warned_subtype = true;
+                        let loc = src.token_to_location(token);
+                        warning!(at: &loc.path, line: loc.line_no_or_0(), "(anonymous?) sub-`{}` in `struct` not yet supported", token);
+                        self.issues.push(Issue::new(loc, format!("(anonymous?) sub-`{}` in `struct` not yet supported", token)));
+                    }
+                    // continue trying to parse what we can anyways
+                },
+                _ => {},
+            }
 
             // parse:   const int * const   name;
             // as:      ty    ty  ty ty     name;
