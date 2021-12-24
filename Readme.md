@@ -39,14 +39,19 @@ Unstable APIs for scaning the Windows SDK
 | --- | ----------- | ----- |
 | ⚠️ | interfaces   |
 | ⚠️ | methods      | No signature information, `STDCALL[_]` marked only
-| ⚠️ | structs      | No anonymous structs, `typedef struct ... {` must all be on same line
+| ⚠️ | structs      | Must have the form `typedef struct ... { ... } ...;`
 | ⚠️ | functions    | `WINAPI` marked only
-| ❌ | unions       | No anonymous unions, `typedef union ... {` must all be on same line
-| ❌ | enums        |
+| ⚠️ | unions       | Must have the form `typedef union ... { ... } ...;`
+| ⚠️ | enums        | Must have the form `typedef enum ... { ... } ...;`
 | ❌ | flags        |
 | ❌ | constants    |
 | ❌ | macros       |
 | ❌ | namespaces   |
+
+⚠️ Caveats ⚠️
+*   Bitfields are not (yet?) supported
+*   Anonymous interior structs/unions are not (yet?) supported
+*   Preprocessor `#if ... #endif` junk within types is not (yet?) supported
 
 
 
