@@ -30,6 +30,20 @@ pub(crate) trait StrExt {
         idx == 0 || idx == bytes.len() || (bytes[idx-1].is_ascii_word_character() != bytes[idx-0].is_ascii_word_character())
     }
 
+    fn trim_start_cpp_whitespace_comments(&self) -> &str {
+        let mut str = self.as_str();
+        loop {
+            str = str.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+            if str.starts_with("//") {
+                str = str.split_once('\n').map_or("", |(_, after)| after);
+            } else if str.starts_with("/*") {
+                str = str.split_once("*/").map_or("", |(_, after)| after);
+            } else {
+                return str;
+            }
+        }
+    }
+
     fn strip_prefix_suffix  (&self, prefix: &str, suffix: &str) -> Option<&str> { self.as_str().strip_prefix(prefix).and_then(move |s| s.strip_suffix(suffix)) }
     fn split_once_trim      (&self, s: &str)            -> Option<(&str, &str)> { self.as_str().split_once(s).map(|(a, b)| (a.trim_end(), b.trim_start())) }
     fn rsplit_once_trim     (&self, s: &str)            -> Option<(&str, &str)> { self.as_str().rsplit_once(s).map(|(a, b)| (a.trim_end(), b.trim_start())) }
