@@ -13,6 +13,24 @@ Unstable APIs for scaning the Windows SDK
 
 
 
+### Quickstart
+
+```toml
+# Cargo.toml
+[dependencies]
+maulingmonkey-windows-sdk-scanner.git = "https://github.com/MaulingMonkey/windows-sdk-scanner"
+```
+
+```rust
+// *.rs
+use maulingmonkey_windows_sdk_scanner::*;
+let sdk = sdk::WindowsKit::find_latest().unwrap();
+let mut cpp = RootBuilder::new();
+cpp.add_from_sdk(&sdk, false).unwrap();
+let cpp : Root = cpp.finish();
+for s in cpp.structs.values_by_key() { dbg!(s); }
+```
+
 ### Why?
 
 *   Windows SDK headers are the closest thing to being the "truth on the ground."

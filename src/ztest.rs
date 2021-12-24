@@ -29,3 +29,14 @@ use std::io::Write;
         write!(o, "{:#?}", root).unwrap();
     }
 }
+
+#[test] fn test_readme_md_quickstart_compiles() {
+    if false {
+        //use maulingmonkey_windows_sdk_scanner::*;
+        let sdk = sdk::WindowsKit::find_latest().unwrap();
+        let mut cpp = RootBuilder::new();
+        cpp.add_from_sdk(&sdk, false).unwrap();
+        let cpp : Root = cpp.finish();
+        for s in cpp.structs.values_by_key() { dbg!(s); }
+    }
+}
