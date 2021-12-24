@@ -139,7 +139,14 @@ impl Root {
 
                     let name        = expect_token!("name after `typedef {}`", category);
                     let open_brace  = expect_token!("`{{` or `;` after `typedef {} {}`", category, name);
-                    if open_brace != "{" { continue 'file1 } // `;`?
+                    match &*open_brace {
+                        ";" => continue 'file1,
+                        "{" => {},
+                        _other => {
+                            // TODO: warn?
+                            continue 'file1;
+                        },
+                    }
 
                     let loc = src.token_to_location(name);
                     match &*category {
