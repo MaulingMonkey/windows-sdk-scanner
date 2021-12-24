@@ -71,7 +71,113 @@ impl Root {
         let all = std::fs::read_to_string(&path)?;
         let mut src = SrcReader::new(path.clone(), &all);
 
-        'file: while let Some(line) = src.next_line() {
+        let interface_by_token = false;
+        let func_by_token = false;
+        let type_by_token = true;
+
+        'file1: while let Some(token) = src.next_token() {
+            macro_rules! fail {
+                ( $($tt:tt)* ) => {{
+                    let (line, col) = src.token_to_line_col(token);
+                    warning!(at: &path, line: line, column: col, $($tt)*);
+                }};
+            }
+
+            macro_rules! expect_token {
+                ( $($tt:tt)* ) => {
+                    if let Some(token) = src.next_token() {
+                        token
+                    } else {
+                        let (line, col) = src.token_to_line_col(token);
+                        warning!(at: &path, line: line, column: col, $($tt)*);
+                        break 'file1;
+                    }
+                };
+            }
+
+            match &*token {
+                "DECLARE_INTERFACE" if interface_by_token => {
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some("(") { fail!("expected `(` after `{}`, instead got {:?}", token, _paren); continue 'file1 }
+                    let interface   = src.next_token();
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some(")") { fail!("expected `)` after `{}(...`, instead got {:?}", token, _paren); continue 'file1 }
+                },
+                "DECLARE_INTERFACE_" if interface_by_token => {
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some("(") { fail!("expected `(` after `{}`, instead got {:?}", token, _paren); continue 'file1 }
+                    let interface   = src.next_token();
+                    let _comma      = src.next_token(); if _comma.as_deref() != Some(",") { fail!("expected `,` after `{}(...`, instead got {:?}", token, _comma); continue 'file1 }
+                    let base        = src.next_token();
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some(")") { fail!("expected `)` after `{}(..., ...`, instead got {:?}", token, _paren); continue 'file1 }
+                },
+                "MIDL_INTERFACE" if interface_by_token => {
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some("(") { fail!("expected `(` after `{}`, instead got {:?}", token, _paren); continue 'file1 }
+                    let interface   = src.next_token();
+                    let _paren      = src.next_token(); if _paren.as_deref() != Some(")") { fail!("expected `)` after `{}(...`, instead got {:?}", token, _paren); continue 'file1 }
+                },
+                "WINAPI" if func_by_token => {
+                    let abi = token;
+                    let mut name = abi;
+                    while let Some(token) = src.next_token() {
+                        if token == "(" {
+                            if !Function::valid_name(&*name) { continue 'file1 }
+                            let mut func = Function::new(Ident::own(&*name));
+                            func.abi = FunctionAbi::Winapi;
+                            self.add_function(&src.token_to_location(name), func);
+                        } else {
+                            name = token;
+                        }
+                    }
+                },
+                "typedef" if type_by_token => {
+                    let category = expect_token!("`enum`, `struct`, `interface`, or `union` after `typedef`");
+                    match &*category {
+                        "enum"      => {},
+                        "struct"    => {},
+                        "interface" => {},
+                        "union"     => {},
+                        _other      => continue 'file1, // `typedef Foo Bar;` or similar
+                    }
+
+                    let name        = expect_token!("name after `typedef {}`", category);
+                    let open_brace  = expect_token!("`{{` or `;` after `typedef {} {}`", category, name);
+                    if open_brace != "{" { continue 'file1 } // `;`?
+
+                    let loc = src.token_to_location(name);
+                    match &*category {
+                        "enum" => {
+                            let mut e = Enum::new(Ident::own(&*name));
+                            let _ = e.add_from_cpp(&loc, &mut src, true);
+                            self.add_enum(&loc, e);
+                        },
+                        "struct" => {
+                            if name.ends_with("Vtbl") {
+                                // ignore: typedef struct IUnknownVtbl { BEGIN_INTERFACE ... END_INTERFACE } IUnknownVtbl;
+                                while let Some(t) = src.next_token() {
+                                    if t == "END_INTERFACE" || t == "}" { break }
+                                }
+                                continue 'file1;
+                            }
+                            let mut s = Struct::new(Ident::own(&*name));
+                            let _ = s.add_from_cpp(&loc, &mut src, true);
+                            self.add_struct(&src.token_to_location(name), s);
+                        },
+                        "union" => {
+                            let mut u = Union::new(Ident::own(&*name));
+                            let _ = u.add_from_cpp(&loc, &mut src, true);
+                            self.add_union(&src.token_to_location(name), u);
+                        },
+                        "interface" => {},
+                        _ => {},
+                    }
+                },
+                _other => {
+                    // ...
+                },
+            }
+        }
+
+        src.reset();
+
+        'file2: while let Some(line) = src.next_line() {
             let unexpected_eof  = |e| unexpected_eof(&line.location, e);
             let warn_expected   = |e| warn_expected(&line.location, e);
 
@@ -121,27 +227,26 @@ impl Root {
                 let rest = line.trimmed[winapi+6..].trim_start();
                 let func_end = rest.find('(').unwrap_or(rest.len());
                 let func = rest[..func_end].trim_end();
-                if !Function::valid_name(func) { continue 'file }
+                if !Function::valid_name(func) { continue 'file2 }
                 let mut func = Function::new(Ident::own(func));
                 func.abi = FunctionAbi::Winapi;
                 self.add_function(&line.location, func);
+            } else if !type_by_token {
+                // ...skip the rest
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef struct ", "{").map(str::trim) {
                 // FIXME: `enum` might be on next line (e.g. `D3D11_AUTHENTICATED_PROCESS_IDENTIFIER_TYPE`)
                 // FIXME: `{` might be on next line (e.g. `D3D11_AUTHENTICATED_PROTECTION_FLAGS`)
                 let mut s = Struct::new(Ident::own(name));
-                let err = s.add_from_cpp(&line.location, &mut src, true);
-                self.add_structure(&line.location, s);
-                err?;
+                let _ = s.add_from_cpp(&line.location, &mut src, true);
+                self.add_struct(&line.location, s);
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef union ", "{").map(str::trim) {
                 let mut u = Union::new(Ident::own(name));
-                let err = u.add_from_cpp(&line.location, &mut src, true);
+                let _ = u.add_from_cpp(&line.location, &mut src, true);
                 self.add_union(&line.location, u);
-                err?;
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef enum ", "{").map(str::trim) {
                 let mut e = Enum::new(Ident::own(name));
-                let err = e.add_from_cpp(&line.location, &mut src, true);
-                self.add_enumeration(&line.location, e);
-                err?;
+                let _ = e.add_from_cpp(&line.location, &mut src, true);
+                self.add_enum(&line.location, e);
             } else {
                 // flags? ...?
             }
@@ -196,7 +301,7 @@ impl Root {
         }
     }
 
-    fn add_structure(&mut self, _loc: &Location, structure: Struct) {
+    fn add_struct(&mut self, _loc: &Location, structure: Struct) {
         match self.structs.entry(structure.id.clone()) {
             vec_map::Entry::Vacant(entry) => drop(entry.insert(structure)),
             vec_map::Entry::Occupied(entry) => {
@@ -216,7 +321,7 @@ impl Root {
         }
     }
 
-    fn add_enumeration(&mut self, _loc: &Location, e: Enum) {
+    fn add_enum(&mut self, _loc: &Location, e: Enum) {
         match self.enums.entry(e.id.clone()) {
             vec_map::Entry::Vacant(entry) => drop(entry.insert(e)),
             vec_map::Entry::Occupied(entry) => {

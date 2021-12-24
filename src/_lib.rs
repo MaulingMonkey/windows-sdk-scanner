@@ -20,6 +20,7 @@ mods! {
         inl mod function;
         inl mod ident;
         inl mod interface;
+        inl mod issue;
         inl mod macro_;
         inl mod method;
         inl mod namespace;

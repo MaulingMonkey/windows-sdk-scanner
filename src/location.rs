@@ -17,6 +17,10 @@ impl Location {
     pub fn line_no_or_0(&self) -> usize { self.line_no.map_or(0, |l| l.get()) }
 }
 
+impl Default for Location {
+    fn default() -> Self { Self { path: Path::new("").into(), line_no: None, col_no: None } }
+}
+
 impl Debug for Location {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         write!(fmt, "`{}`", self)

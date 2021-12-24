@@ -1,6 +1,7 @@
 use std::borrow::*;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry::*;
+use std::fmt::{self, Debug, Formatter};
 use std::marker::PhantomData;
 use std::mem::replace;
 
@@ -81,18 +82,35 @@ impl<K, V> Default for VecMap<K, V> {
     fn default() -> Self { Self { keys: Default::default(), values: Default::default() } }
 }
 
+impl<K: Debug, V: Debug> Debug for VecMap<K, V> {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        let mut map = fmt.debug_map();
+        for (k, v) in self.iter_by_key() {
+            map.entry(&k, &v);
+        }
+        map.finish()
+    }
+}
+
 
 
 pub mod vec_map {
     use std::collections::btree_map;
     use std::marker::PhantomData;
 
+    use Entry::*;
     pub enum Entry<'a, K: 'a, V: 'a> {
         Vacant(VacantEntry<'a, K, V>),
         Occupied(OccupiedEntry<'a, K, V>),
     }
 
     impl<'a, K: 'a, V: 'a> Entry<'a, K, V> {
+        pub fn or_insert_with(self, default: impl FnOnce() -> V) -> &'a mut V where K: Ord {
+            match self {
+                Occupied(entry) => entry.into_mut(),
+                Vacant(entry) => entry.insert(default()),
+            }
+        }
     }
 
 
@@ -124,5 +142,6 @@ pub mod vec_map {
     impl<'a, K: 'a, V: 'a> OccupiedEntry<'a, K, V> {
         pub fn get    (&    self) -> &    V { &    self.values[self.idx] }
         pub fn get_mut(&mut self) -> &mut V { &mut self.values[self.idx] }
+        pub fn into_mut(    self) -> &'a mut V { &mut self.values[self.idx] }
     }
 }
