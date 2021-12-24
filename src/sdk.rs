@@ -17,6 +17,11 @@ pub struct WindowsKit {
 
 impl WindowsKit {
     /// Find e.g. `C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\`
+    pub fn find_latest() -> io::Result<Self> {
+        Self::find_all()?.into_iter().last().ok_or_else(|| io::Error::from(io::ErrorKind::NotFound))
+    }
+
+    /// Find e.g. `C:\Program Files (x86)\Windows Kits\10\Include\10.0.19041.0\`
     pub fn find_all() -> io::Result<Vec<Self>> {
         let mut paths = Vec::new();
         for env in [
