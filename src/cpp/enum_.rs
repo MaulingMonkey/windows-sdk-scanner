@@ -7,7 +7,8 @@ use std::ops::{Deref, DerefMut};
 
 
 
-/// `typedef enum { ... } id;`
+/// `typedef enum _ID { ... } ID;` or
+/// `typedef enum class _ID { ... } ID;`
 pub struct Enum {
     pub id:                     Ident,
     pub data:                   EnumData,
@@ -26,16 +27,89 @@ impl Enum {
 
     pub fn new(id: Ident) -> Self { Self { id, data: Default::default() } }
 
-    pub(crate) fn add_from_cpp(&mut self, enum_start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+    /// Parse e.g. `name1, name2 = name2 } alias1, alias2 ;`
+    ///
+    /// Expects you've already parsed:
+    /// *   Any initial `typedef` keyword
+    /// *   The initial `enum` or `enum class` keyword(s)
+    /// *   Any initial enum name
+    /// *   The initial opening brace `{`
+    ///
+    /// Parses:
+    /// *   Enum key/value pairs
+    /// *   The closing brace `}` of the enum
+    /// *   Any trailing names for enum typedefs or instances
+    /// *   The closing `;` of the enum
+    ///
+    pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+        self.data.add_from_cpp(start, src)?;
+
         macro_rules! err {
             ( $($tt:tt)* ) => {
-                warning!(at: &enum_start.path, line: enum_start.line_no_or_0(), $($tt)*)
+                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
             };
         }
 
         macro_rules! expect_token { () => {
             src.next_token().ok_or_else(||{
-                self.data.issues.push(Issue::new(enum_start.clone(), "expected `}}` to end enum before end of file"));
+                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
+                err!("expected `}}` to end enum before end of file")
+            })?
+        }}
+
+        let mut expr = String::new();
+        let mut exprs = Vec::new();
+        loop {
+            let token = expect_token!();
+            match &*token {
+                ";" => break,
+                "," => exprs.push(std::mem::take(&mut expr)),
+                s => {
+                    if !expr.is_empty() { expr.push(' ') }
+                    expr.push_str(s);
+                }
+            }
+        }
+        if !expr.is_empty() { exprs.push(expr) }
+
+        for expr in exprs.into_iter() {
+            // given `typedef struct _ID { ... } ID;`, drop `_ID` in favor of `ID`
+            if typedef && self.id.starts_with("_") && self.id[1..] == expr {
+                self.id = Ident::from(expr);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl EnumData {
+    /// Parse e.g. `name1, name2 = name2 }`
+    ///
+    /// Expects you've already parsed:
+    /// *   Any initial `typedef` keyword
+    /// *   The initial `enum` or `enum class` keyword(s)
+    /// *   Any initial enum name
+    /// *   The initial opening brace `{`
+    ///
+    /// Parses:
+    /// *   Enum key/value pairs
+    /// *   The closing brace `}` of the enum
+    ///
+    /// Does *not* parse:
+    /// *   Any trailing names for enum typedefs or instances
+    /// *   The closing `;` of the enum
+    ///
+    pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader) -> Result<(), ()> {
+        macro_rules! err {
+            ( $($tt:tt)* ) => {
+                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
+            };
+        }
+
+        macro_rules! expect_token { () => {
+            src.next_token().ok_or_else(||{
+                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
                 err!("expected `}}` to end enum before end of file")
             })?
         }}
@@ -45,7 +119,7 @@ impl Enum {
             while token == "#" {
                 let rest_of_line = src.next_line();
                 let rest_of_line = rest_of_line.as_ref().map_or("", |l| &**l);
-                self.data.issues.push(Issue::new(
+                self.issues.push(Issue::new(
                     src.token_to_location(token),
                     format!("preprocessor command inside `enum {{ ... }}` not supported: #{}", rest_of_line)
                 ));
@@ -54,7 +128,7 @@ impl Enum {
 
             if token == "}" { break 'enum_ }
 
-            let value = self.data.values.entry(Ident::own(&*token)).or_insert_with(|| None);
+            let value = self.values.entry(Ident::own(&*token)).or_insert_with(|| None);
             let token = expect_token!();
             match &*token {
                 "=" => {
@@ -64,7 +138,7 @@ impl Enum {
                             "#" => { // probably a preprocessor command
                                 let rest_of_line = src.next_line();
                                 let rest_of_line = rest_of_line.as_ref().map_or("", |l| &**l);
-                                self.data.issues.push(Issue::new(
+                                self.issues.push(Issue::new(
                                     src.token_to_location(token),
                                     format!("preprocessor command inside `enum {{ ... }}` not supported: #{}", rest_of_line)
                                 ));
@@ -85,7 +159,7 @@ impl Enum {
                 "#" => { // probably a preprocessor command
                     let rest_of_line = src.next_line();
                     let rest_of_line = rest_of_line.as_ref().map_or("", |l| &**l);
-                    self.data.issues.push(Issue::new(
+                    self.issues.push(Issue::new(
                         src.token_to_location(token),
                         format!("preprocessor command inside `enum {{ ... }}` not supported: #{}", rest_of_line)
                     ));
