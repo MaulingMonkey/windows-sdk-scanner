@@ -173,7 +173,8 @@ impl Root {
                                 }
                                 continue 'file1;
                             }
-                            let mut s = Aggregate::new_struct(Ident::own(&*name));
+                            let cat = AggregateCategory::from_str(&*category).unwrap();
+                            let mut s = Aggregate::new(cat, Ident::own(&*name));
                             let _ = s.add_from_cpp(&loc, &mut src, true);
                             self.add_aggregate(&src.token_to_location(name), s);
                         },
