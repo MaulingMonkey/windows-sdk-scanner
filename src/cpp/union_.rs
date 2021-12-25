@@ -3,6 +3,7 @@ use crate::*;
 use mmrbi::*;
 
 use std::fmt::{self, Debug, Formatter};
+use std::num::NonZeroU32;
 use std::ops::{Deref, DerefMut};
 
 
@@ -114,7 +115,6 @@ impl UnionData {
             })?
         }}
 
-        let mut warned_bitfields = false;
         let mut warned_subtype = false;
 
         'struct_: loop {
@@ -150,16 +150,15 @@ impl UnionData {
             loop {
                 let token = expect_token!();
                 if token == ";" {
-                    self.add_field(src.token_to_location(possible_name), Ident::from(ty), Ident::own(&*possible_name));
+                    let name = Ident::own(&*possible_name);
+                    self.fields.insert(name.clone(), Field::new(ty, name));
                     continue 'struct_
                 } else if token == ":" {
-                    if !warned_bitfields {
-                        warned_bitfields = true;
-                        let loc = src.token_to_location(token);
-                        warning!(at: &loc.path, line: loc.line_no_or_0(), "bit fields not (yet?) supported");
-                        self.issues.push(Issue::new(loc, format!("bit fields not (yet?) supported")));
-                        self.add_field(src.token_to_location(possible_name), Ident::from(ty), Ident::own(&*possible_name));
-                    }
+                    let ty = Ident::from(ty);
+                    let name = Ident::own(&*possible_name);
+                    let f = self.fields.entry(name.clone()).or_insert_with(move || Field::new(ty, name));
+                    f.bits = expect_token!().parse::<u32>().map_or(None, NonZeroU32::new);
+                    if f.bits.is_none() { err!("union contains invalid bitsets"); }
                     while expect_token!() != ";" {}
                     continue 'struct_
                 } else {
@@ -171,10 +170,6 @@ impl UnionData {
         }
 
         Ok(())
-    }
-
-    fn add_field(&mut self, _location: Location, ty: Ident, name: Ident) {
-        self.fields.insert(name.clone(), Field { ty, id: name, _non_exhaustive: () });
     }
 }
 
