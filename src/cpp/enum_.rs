@@ -3,6 +3,7 @@ use crate::*;
 use mmrbi::*;
 
 use std::fmt::{self, Debug, Formatter};
+use std::ops::{Deref, DerefMut};
 
 
 
@@ -14,6 +15,7 @@ pub struct Enum {
 
 #[derive(Default)]
 pub struct EnumData {
+    pub class:                  bool,
     pub values:                 VecMap<Ident, Option<String>>,
     pub issues:                 Vec<Issue>,
     pub(crate) _non_exhaustive: (),
@@ -101,9 +103,10 @@ impl Enum {
 impl Debug for Enum {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Enum")
-            .field("id",            &self.id            )
-            .field("values",        &self.data.values   )
-            .field("issues",        &self.data.issues   )
+            .field("id",            &self.id        )
+            .field("class",         &self.class     )
+            .field("values",        &self.values    )
+            .field("issues",        &self.issues    )
             .finish_non_exhaustive()
     }
 }
@@ -111,8 +114,18 @@ impl Debug for Enum {
 impl Debug for EnumData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("EnumData")
+            .field("class",         &self.class         )
             .field("values",        &self.values        )
             .field("issues",        &self.issues        )
             .finish_non_exhaustive()
     }
+}
+
+impl Deref for Enum {
+    type Target = EnumData;
+    fn deref(&self) -> &Self::Target { &self.data }
+}
+
+impl DerefMut for Enum {
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.data }
 }

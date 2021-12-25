@@ -13,6 +13,7 @@ use std::sync::*;
 #[derive(Default)]
 pub struct Root {
     pub interfaces:             VecMap<Ident, Interface>,
+    pub classes:                VecMap<Ident, Class>,
     pub structs:                VecMap<Ident, Struct>,
     pub unions:                 VecMap<Ident, Union>,
     pub flags:                  VecMap<Ident, Flags>,
@@ -28,6 +29,7 @@ impl Debug for Root {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
         fmt.debug_struct("Root")
             .field("interfaces",    &self.interfaces    .values_by_key().collect::<Vec<_>>())
+            .field("classes",       &self.classes       .values_by_key().collect::<Vec<_>>())
             .field("structs",       &self.structs       .values_by_key().collect::<Vec<_>>())
             .field("unions",        &self.unions        .values_by_key().collect::<Vec<_>>())
             .field("flags",         &self.flags         .values_by_key().collect::<Vec<_>>())
@@ -130,14 +132,21 @@ impl Root {
                 "typedef" if type_by_token => {
                     let category = expect_token!("`enum`, `struct`, `interface`, or `union` after `typedef`");
                     match &*category {
+                        "class"     => {},
                         "enum"      => {},
-                        "struct"    => {},
                         "interface" => {},
+                        "struct"    => {},
                         "union"     => {},
                         _other      => continue 'file1, // `typedef Foo Bar;` or similar
                     }
 
-                    let name        = expect_token!("name after `typedef {}`", category);
+                    let mut enum_class   = false;
+                    let mut name    = expect_token!("name after `typedef {}`", category);
+                    if category == "enum" && name == "class" {
+                        enum_class = true;
+                        name = expect_token!("name after `typedef enum class`");
+                    }
+
                     let open_brace  = expect_token!("`{{` or `;` after `typedef {} {}`", category, name);
                     match &*open_brace {
                         ";" => continue 'file1,
@@ -152,27 +161,22 @@ impl Root {
                     match &*category {
                         "enum" => {
                             let mut e = Enum::new(Ident::own(&*name));
+                            e.class = enum_class;
                             let _ = e.add_from_cpp(&loc, &mut src, true);
                             self.add_enum(&loc, e);
                         },
-                        "struct" => {
-                            if name.ends_with("Vtbl") {
+                        "class" | "interface" | "struct" | "union" => {
+                            if category == "struct" && name.ends_with("Vtbl") {
                                 // ignore: typedef struct IUnknownVtbl { BEGIN_INTERFACE ... END_INTERFACE } IUnknownVtbl;
                                 while let Some(t) = src.next_token() {
                                     if t == "END_INTERFACE" || t == "}" { break }
                                 }
                                 continue 'file1;
                             }
-                            let mut s = Struct::new(Ident::own(&*name));
+                            let mut s = Aggregate::new_struct(Ident::own(&*name));
                             let _ = s.add_from_cpp(&loc, &mut src, true);
-                            self.add_struct(&src.token_to_location(name), s);
+                            self.add_aggregate(&src.token_to_location(name), s);
                         },
-                        "union" => {
-                            let mut u = Union::new(Ident::own(&*name));
-                            let _ = u.add_from_cpp(&loc, &mut src, true);
-                            self.add_union(&src.token_to_location(name), u);
-                        },
-                        "interface" => {},
                         _ => {},
                     }
                 },
@@ -243,13 +247,13 @@ impl Root {
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef struct ", "{").map(str::trim) {
                 // FIXME: `enum` might be on next line (e.g. `D3D11_AUTHENTICATED_PROCESS_IDENTIFIER_TYPE`)
                 // FIXME: `{` might be on next line (e.g. `D3D11_AUTHENTICATED_PROTECTION_FLAGS`)
-                let mut s = Struct::new(Ident::own(name));
+                let mut s = Aggregate::new_struct(Ident::own(name));
                 let _ = s.add_from_cpp(&line.location, &mut src, true);
-                self.add_struct(&line.location, s);
+                self.add_aggregate(&line.location, s);
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef union ", "{").map(str::trim) {
-                let mut u = Union::new(Ident::own(name));
+                let mut u = Aggregate::new_union(Ident::own(name));
                 let _ = u.add_from_cpp(&line.location, &mut src, true);
-                self.add_union(&line.location, u);
+                self.add_aggregate(&line.location, u);
             } else if let Some(name) = line.trimmed.strip_prefix_suffix("typedef enum ", "{").map(str::trim) {
                 let mut e = Enum::new(Ident::own(name));
                 let _ = e.add_from_cpp(&line.location, &mut src, true);
@@ -308,19 +312,15 @@ impl Root {
         }
     }
 
-    fn add_struct(&mut self, _loc: &Location, structure: Struct) {
-        match self.structs.entry(structure.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(structure)),
-            vec_map::Entry::Occupied(entry) => {
-                let _prev = entry.get();
-                // TODO: fields, layout?
-            },
-        }
-    }
-
-    fn add_union(&mut self, _loc: &Location, u: Union) {
-        match self.unions.entry(u.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(u)),
+    fn add_aggregate(&mut self, _loc: &Location, a: Aggregate) {
+        let agg = match a.category {
+            AggregateCategory::Class        => &mut self.classes,
+            AggregateCategory::Interface    => return, // TODO: implement
+            AggregateCategory::Struct       => &mut self.structs,
+            AggregateCategory::Union        => &mut self.unions,
+        };
+        match agg.entry(a.id.clone()) {
+            vec_map::Entry::Vacant(entry) => drop(entry.insert(a)),
             vec_map::Entry::Occupied(entry) => {
                 let _prev = entry.get();
                 // TODO: fields, layout?

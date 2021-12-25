@@ -26,7 +26,6 @@ mods! {
         inl mod namespace;
         inl mod struct_;
         inl mod type_;
-        inl mod union_;
     }
 
     inl mod ext {

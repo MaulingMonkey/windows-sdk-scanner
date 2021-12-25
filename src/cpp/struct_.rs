@@ -8,8 +8,16 @@ use std::ops::{Deref, DerefMut};
 
 
 
+pub type Class      = Aggregate;
+pub type Struct     = Aggregate;
+pub type Union      = Aggregate;
+
+pub type ClassData  = AggregateData;
+pub type StructData = AggregateData;
+pub type UnionData  = AggregateData;
+
 /// `typedef struct _id { ... } id;`
-pub struct Struct {
+pub struct Aggregate {
     pub id:                     Ident,
     pub data:                   StructData,
     // typedefs?
@@ -17,16 +25,32 @@ pub struct Struct {
 
 /// `struct { ... }`
 #[derive(Default)]
-pub struct StructData {
+pub struct AggregateData {
+    pub category:               AggregateCategory,
     pub base:                   Option<Ident>,
     pub fields:                 VecMap<Ident, Field>,
     pub issues:                 Vec<Issue>,
     pub(crate) _non_exhaustive: (),
 }
 
-impl Struct {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AggregateCategory {
+    Class,
+    Struct,
+    Interface,
+    Union,
+}
+
+impl Default for AggregateCategory { fn default() -> Self { AggregateCategory::Struct } }
+
+impl Aggregate {
     pub fn valid_name(name: &str) -> bool { valid_name(name) }
-    pub fn new(id: Ident) -> Self { Self { id, data: Default::default() } }
+
+    pub fn new_class    (id: Ident) -> Self { Self::new(AggregateCategory::Class,  id) }
+    pub fn new_struct   (id: Ident) -> Self { Self::new(AggregateCategory::Struct, id) }
+    pub fn new_union    (id: Ident) -> Self { Self::new(AggregateCategory::Union,  id) }
+
+    pub fn new(category: AggregateCategory, id: Ident) -> Self { Self { id, data: AggregateData { category, .. Default::default() } } }
 
     /// Parse e.g. `ty1 name1; ty2 name2; }`
     ///
@@ -84,7 +108,7 @@ impl Struct {
     }
 }
 
-impl StructData {
+impl AggregateData {
     /// Parse e.g. `ty1 name1; ty2 name2; }`
     ///
     /// Expects you've already parsed:
@@ -173,10 +197,11 @@ impl StructData {
     }
 }
 
-impl Debug for Struct {
+impl Debug for Aggregate {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        fmt.debug_struct("Struct")
+        fmt.debug_struct("Aggregate")
             .field("id",            &self.id                                    )
+            .field("category",      &self.category                              )
             .field("base",          &self.base                                  )
             .field("fields",        &self.fields.values_by_insert().collect::<Vec<_>>()   )
             .field("issues",        &self.issues                                )
@@ -184,9 +209,10 @@ impl Debug for Struct {
     }
 }
 
-impl Debug for StructData {
+impl Debug for AggregateData {
     fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
-        fmt.debug_struct("StructData")
+        fmt.debug_struct("AggregateData")
+            .field("category",      &self.category                              )
             .field("base",          &self.base                                  )
             .field("fields",        &self.fields.values_by_insert().collect::<Vec<_>>()   )
             .field("issues",        &self.issues                                )
@@ -194,11 +220,11 @@ impl Debug for StructData {
     }
 }
 
-impl Deref for Struct {
-    type Target = StructData;
+impl Deref for Aggregate {
+    type Target = AggregateData;
     fn deref(&self) -> &Self::Target { &self.data }
 }
 
-impl DerefMut for Struct {
+impl DerefMut for Aggregate {
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.data }
 }
