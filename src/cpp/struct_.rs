@@ -16,14 +16,14 @@ pub type ClassData  = AggregateData;
 pub type StructData = AggregateData;
 pub type UnionData  = AggregateData;
 
-/// `typedef struct _id { ... } id;`
+/// `typedef [class | struct | union] _id { ... } id;`
 pub struct Aggregate {
     pub id:                     Ident,
     pub data:                   StructData,
     // typedefs?
 }
 
-/// `struct { ... }`
+/// `[class | struct | union] { ... }`
 #[derive(Default)]
 pub struct AggregateData {
     pub category:               AggregateCategory,
