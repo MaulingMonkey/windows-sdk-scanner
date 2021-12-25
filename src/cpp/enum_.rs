@@ -114,6 +114,8 @@ impl EnumData {
             })?
         }}
 
+        let mut warn_enumerand_name = false;
+
         'enum_: loop {
             let mut token = expect_token!();
             while token == "#" {
@@ -166,7 +168,16 @@ impl EnumData {
                 },
                 ","     => continue 'enum_,
                 "}"     => break 'enum_,
-                other   => drop(err!("expected `= value,` or `,` after enumerand name, instead got `{}`", other)),
+                _       => {
+                    if !warn_enumerand_name {
+                        warn_enumerand_name = true;
+                        let msg = format!("expected `= value,` or `,` after enumerand name, instead got `{}`", token);
+                        let loc = src.token_to_location(token);
+                        warning!(at: &loc.path, line: loc.line_no_or_0(), "{}", msg);
+                        self.issues.push(Issue::new(loc, &msg));
+                    }
+                    let _ = src.next_line();
+                },
             }
         }
         // TODO: try to parse `name, name, name;` first?
