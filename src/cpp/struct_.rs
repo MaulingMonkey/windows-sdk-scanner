@@ -43,6 +43,18 @@ pub enum AggregateCategory {
 
 impl Default for AggregateCategory { fn default() -> Self { AggregateCategory::Struct } }
 
+impl AggregateCategory {
+    pub fn from_str(s: &str) -> Option<Self> {
+        Some(match s {
+            "class"     => AggregateCategory::Class,
+            "struct"    => AggregateCategory::Struct,
+            "interface" => AggregateCategory::Interface,
+            "union"     => AggregateCategory::Union,
+            _           => return None,
+        })
+    }
+}
+
 impl Aggregate {
     pub fn valid_name(name: &str) -> bool { valid_name(name) }
 
@@ -139,8 +151,6 @@ impl AggregateData {
             })?
         }}
 
-        let mut warned_subtype = false;
-
         'struct_: loop {
             let mut token = expect_token!();
             while token == "#" {
@@ -156,13 +166,34 @@ impl AggregateData {
             match &*token {
                 "}" => break 'struct_,
                 "enum" | "struct" | "union" => {
-                    if !warned_subtype {
-                        warned_subtype = true;
-                        let loc = src.token_to_location(token);
-                        warning!(at: &loc.path, line: loc.line_no_or_0(), "(anonymous?) sub-`{}` in `struct` not yet supported", token);
-                        self.issues.push(Issue::new(loc, format!("(anonymous?) sub-`{}` in `struct` not yet supported", token)));
+                    let name_or_brace = expect_token!();
+                    if name_or_brace != "{" {
+                        let _name = expect_token!();
                     }
-                    // continue trying to parse what we can anyways
+
+                    let mut agg = AggregateData::default();
+                    agg.category = AggregateCategory::from_str(&*token).unwrap();
+                    let _ = agg.add_from_cpp(&src.token_to_location(token), src);
+
+                    // field_name ;
+                    let semi_or_name = expect_token!();
+                    let (field_name, semi) = if semi_or_name == ";" {
+                        (None, semi_or_name)
+                    } else {
+                        (Some(semi_or_name), expect_token!())
+                    };
+
+                    if semi == ";" {
+                        let name = field_name.as_ref().map_or(Ident::from(""), |field_name| Ident::own(&**field_name));
+                        self.fields.insert(name.clone(), Field::new_agg(agg, name));
+                        continue 'struct_
+                    } else {
+                        let field_name = field_name.as_ref().unwrap();
+                        let loc = src.token_to_location(semi);
+                        warning!(at: &start.path, line: loc.line_no_or_0(), "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
+                        self.issues.push(Issue::new(loc, format!("expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi)));
+                        while expect_token!() != ";" {}
+                    }
                 },
                 _ => {},
             }
