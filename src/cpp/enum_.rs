@@ -2,6 +2,7 @@ use crate::*;
 
 use mmrbi::*;
 
+use std::collections::*;
 use std::fmt::{self, Debug, Formatter};
 use std::ops::{Deref, DerefMut};
 
@@ -12,6 +13,8 @@ use std::ops::{Deref, DerefMut};
 pub struct Enum {
     pub id:                     Ident,
     pub data:                   EnumData,
+    /// Location(s) this type was defined at.
+    pub defined_at:             BTreeSet<Location>,
 }
 
 #[derive(Default)]
@@ -25,7 +28,7 @@ pub struct EnumData {
 impl Enum {
     pub fn valid_name(name: &str) -> bool { valid_name(name) }
 
-    pub fn new(id: Ident) -> Self { Self { id, data: Default::default() } }
+    pub fn new(id: Ident) -> Self { Self { id, data: Default::default(), defined_at: Default::default() } }
 
     /// Parse e.g. `name1, name2 = name2 } alias1, alias2 ;`
     ///
@@ -42,6 +45,7 @@ impl Enum {
     /// *   The closing `;` of the enum
     ///
     pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+        self.defined_at.insert(start.clone());
         self.data.add_from_cpp(start, src)?;
 
         macro_rules! err {

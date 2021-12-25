@@ -2,6 +2,7 @@ use crate::*;
 
 use mmrbi::*;
 
+use std::collections::*;
 use std::fmt::{self, Debug, Formatter};
 use std::num::NonZeroU32;
 use std::ops::{Deref, DerefMut};
@@ -20,6 +21,8 @@ pub type UnionData  = AggregateData;
 pub struct Aggregate {
     pub id:                     Ident,
     pub data:                   StructData,
+    /// Location(s) this type was defined at.
+    pub defined_at:             BTreeSet<Location>,
     // typedefs?
 }
 
@@ -62,7 +65,7 @@ impl Aggregate {
     pub fn new_struct   (id: Ident) -> Self { Self::new(AggregateCategory::Struct, id) }
     pub fn new_union    (id: Ident) -> Self { Self::new(AggregateCategory::Union,  id) }
 
-    pub fn new(category: AggregateCategory, id: Ident) -> Self { Self { id, data: AggregateData { category, .. Default::default() } } }
+    pub fn new(category: AggregateCategory, id: Ident) -> Self { Self { id, data: AggregateData { category, .. Default::default() }, defined_at: Default::default() } }
 
     /// Parse e.g. `ty1 name1; ty2 name2; }`
     ///
@@ -79,6 +82,7 @@ impl Aggregate {
     /// *   The closing `;` of the struct
     ///
     pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+        self.defined_at.insert(start.clone());
         self.data.add_from_cpp(start, src)?;
 
         macro_rules! err {
