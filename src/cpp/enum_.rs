@@ -46,7 +46,7 @@ impl Enum {
 
         macro_rules! err {
             ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
+                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
             };
         }
 
@@ -103,7 +103,7 @@ impl EnumData {
     pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader) -> Result<(), ()> {
         macro_rules! err {
             ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
+                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
             };
         }
 
@@ -173,7 +173,7 @@ impl EnumData {
                         warn_enumerand_name = true;
                         let msg = format!("expected `= value,` or `,` after enumerand name, instead got `{}`", token);
                         let loc = src.token_to_location(token);
-                        warning!(at: &loc.path, line: loc.line_no_or_0(), "{}", msg);
+                        warning!(at: &loc.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), "{}", msg);
                         self.issues.push(Issue::new(loc, &msg));
                     }
                     let _ = src.next_line();

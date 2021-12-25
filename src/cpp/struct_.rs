@@ -83,7 +83,7 @@ impl Aggregate {
 
         macro_rules! err {
             ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
+                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
             };
         }
 
@@ -140,7 +140,7 @@ impl AggregateData {
     pub(crate) fn add_from_cpp<'src>(&mut self, start: &Location, src: &'src mut SrcReader) -> Result<(), ()> {
         macro_rules! err {
             ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), $($tt)*)
+                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
             };
         }
 
@@ -190,7 +190,7 @@ impl AggregateData {
                     } else {
                         let field_name = field_name.as_ref().unwrap();
                         let loc = src.token_to_location(semi);
-                        warning!(at: &start.path, line: loc.line_no_or_0(), "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
+                        warning!(at: &start.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
                         self.issues.push(Issue::new(loc, format!("expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi)));
                         while expect_token!() != ";" {}
                     }

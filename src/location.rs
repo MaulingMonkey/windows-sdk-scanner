@@ -14,6 +14,7 @@ pub struct Location {
 }
 
 impl Location {
+    pub fn col_no_or_0(&self)  -> usize { self.col_no.map_or(0, |c| c.get()) }
     pub fn line_no_or_0(&self) -> usize { self.line_no.map_or(0, |l| l.get()) }
 }
 

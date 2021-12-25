@@ -269,6 +269,7 @@ impl Root {
     fn add_interface(&mut self, loc: &Location, mut interface: Interface) {
         let path = &*loc.path;
         let line_no = loc.line_no_or_0();
+        let col_no  = loc.col_no_or_0();
 
         match self.interfaces.entry(interface.id.clone()) {
             vec_map::Entry::Vacant(entry) => {
@@ -283,12 +284,12 @@ impl Root {
                 let interface = &interface.id;
                 loop {
                     match (prev_methods.next(), new_methods.next()) {
-                        (Some(prev), Some(new)) if prev < new => warning!(at: path, line: line_no, "duplicate interface `{}` missing previous method `{}`", interface, prev),
-                        (Some(prev), Some(new)) if prev > new => warning!(at: path, line: line_no, "duplicate interface `{}` adds new method `{}`", interface, new),
+                        (Some(prev), Some(new)) if prev < new => warning!(at: path, line: line_no, column: col_no, "duplicate interface `{}` missing previous method `{}`", interface, prev),
+                        (Some(prev), Some(new)) if prev > new => warning!(at: path, line: line_no, column: col_no, "duplicate interface `{}` adds new method `{}`", interface, new),
                         (Some(_prev), Some(_new)) => continue,
 
-                        (Some(prev), None)  => warning!(at: path, line: line_no, "duplicate interface `{}` missing previous method `{}`", interface, prev),
-                        (None, Some(new))   => warning!(at: path, line: line_no, "duplicate interface `{}` adds new method `{}`", interface, new),
+                        (Some(prev), None)  => warning!(at: path, line: line_no, column: col_no, "duplicate interface `{}` missing previous method `{}`", interface, prev),
+                        (None, Some(new))   => warning!(at: path, line: line_no, column: col_no, "duplicate interface `{}` adds new method `{}`", interface, new),
                         (None, None)        => {},
                     }
                     break;
@@ -305,7 +306,7 @@ impl Root {
             },
             vec_map::Entry::Occupied(mut entry) => {
                 let prev = entry.get_mut();
-                if function.abi != prev.abi { warning!(at: &loc.path, line: loc.line_no_or_0(), "duplicate function declaration for `{}` has varying ABI: {:?} vs {:?}", function.id, prev.abi, function.abi) }
+                if function.abi != prev.abi { warning!(at: &loc.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), "duplicate function declaration for `{}` has varying ABI: {:?} vs {:?}", function.id, prev.abi, function.abi) }
                 // TODO: ret, params?
                 prev.defined_at.insert(loc.clone());
             },

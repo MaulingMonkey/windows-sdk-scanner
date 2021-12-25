@@ -114,7 +114,7 @@ impl Interface {
     fn add_method(&mut self, location: &Location, method: Method) {
         debug_assert_eq!(method.ty, self.id);
         if let Some(prev) = self.all_methods.insert(method.f.id.clone(), method) {
-            warning!(at: &location.path, line: location.line_no_or_0(), "duplicate method `{}::{}`", prev.ty, prev.f.id);
+            warning!(at: &location.path, line: location.line_no_or_0(), column: location.col_no_or_0(), "duplicate method `{}::{}`", prev.ty, prev.f.id);
         }
     }
 }
