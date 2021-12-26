@@ -138,6 +138,8 @@ impl EnumData {
             let token = expect_token!();
             match &*token {
                 "=" => {
+                    let value = value.get_or_insert(Default::default());
+                    let mut parens = 0;
                     'value: loop {
                         let token = expect_token!();
                         match &*token {
@@ -149,15 +151,21 @@ impl EnumData {
                                     format!("preprocessor command inside `enum {{ ... }}` not supported: #{}", rest_of_line)
                                 ));
                             },
-                            "," => break 'value,
+                            "," if parens == 0 => break 'value,
                             "}" => break 'enum_,
+                            ")" if parens == 0 => {
+                                let msg = "more closing `)` parens than opening `(` parens in enumerand value";
+                                let loc = src.token_to_location(token);
+                                error!(at: &loc.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), "{}", msg);
+                                self.issues.push(Issue::new(loc, msg));
+                                value.push_str(" )");
+                            },
+                            "(" => { parens += 1; value.push_str("("); }, // avoid initial whitespace
+                            ")" => { parens -= 1; value.push_str(" )"); },
+                            "," | "<" | "{" | "[" => value.push_str(&*token), // avoid initial whitespace
                             more => {
-                                if let Some(value) = value {
-                                    value.push(' ');
-                                    value.push_str(more);
-                                } else {
-                                    *value = Some(more.into());
-                                }
+                                if !value.is_empty() { value.push(' ') }
+                                value.push_str(more);
                             },
                         }
                     }
