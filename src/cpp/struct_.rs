@@ -113,10 +113,12 @@ impl Aggregate {
         }
         if !expr.is_empty() { exprs.push(expr) }
 
+        // given `typedef struct _ID { ... } ID;`, drop `_ID` in favor of `ID`
+        let id_trim = self.id.trim_start_matches('_').trim_end_matches('_');
         for expr in exprs.into_iter() {
-            // given `typedef struct _ID { ... } ID;`, drop `_ID` in favor of `ID`
-            if typedef && self.id.starts_with("_") && self.id[1..] == expr {
+            if typedef && expr == id_trim {
                 self.id = Ident::from(expr);
+                break;
             }
         }
 
