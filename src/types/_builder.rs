@@ -57,15 +57,15 @@ impl RootBuilder {
             r"um\d3dcaps.h",
             r"um\d3dcommon.h",
             r"um\d3dcsx.h",
-            // r"um\d3dhal.h", // XXX: anonymous unions
+            r"um\d3dhal.h",
             r"um\d3dhalex.h",
             r"um\d3dnthal.h",
-            // r"um\d3dtypes.h", // XXX: anonymous unions
+            r"um\d3dtypes.h",
 
             // d3d9
             r"shared\d3d9.h",
             r"shared\d3d9caps.h",
-            // r"shared\d3d9types.h", // XXX: anonymous unions
+            r"shared\d3d9types.h",
 
             // d3d11
             r"um\d3d11.h",
@@ -82,7 +82,7 @@ impl RootBuilder {
             r"um\d3dcompiler.h",
 
             // dinput
-            // r"um\dinput.h", // XXX: anonymous unions
+            r"um\dinput.h",
 
             // dxcompiler
             // ???

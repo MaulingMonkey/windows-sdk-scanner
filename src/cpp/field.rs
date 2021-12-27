@@ -21,6 +21,10 @@ impl Field {
     pub fn new_agg(ty: impl Into<AggregateData>, id: impl Into<Ident>) -> Self {
         Self { ty: Type::Aggregate(ty.into()), id: id.into(), bits: Default::default(), _ne: () }
     }
+
+    pub fn new_enum(ty: impl Into<EnumData>, id: impl Into<Ident>) -> Self {
+        Self { ty: Type::Enum(ty.into()), id: id.into(), bits: Default::default(), _ne: () }
+    }
 }
 
 impl Debug for Field {

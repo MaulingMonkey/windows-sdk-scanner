@@ -3,7 +3,7 @@ use crate::*;
 use mmrbi::*;
 
 use std::collections::*;
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Debug, Formatter, Display};
 use std::num::NonZeroU32;
 use std::ops::{Deref, DerefMut};
 
@@ -58,6 +58,17 @@ impl AggregateCategory {
     }
 }
 
+impl Display for AggregateCategory {
+    fn fmt(&self, fmt: &mut Formatter) -> fmt::Result {
+        write!(fmt, "{}", match *self {
+            AggregateCategory::Class        => "class",
+            AggregateCategory::Struct       => "struct",
+            AggregateCategory::Interface    => "interface",
+            AggregateCategory::Union        => "union",
+        })
+    }
+}
+
 impl Aggregate {
     pub fn valid_name(name: &str) -> bool { valid_name(name) }
 
@@ -81,20 +92,16 @@ impl Aggregate {
     /// *   Any trailing names for struct typedefs or instances
     /// *   The closing `;` of the struct
     ///
-    pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
-        self.defined_at.insert(start.clone());
+    pub(crate) fn add_from_cpp(&mut self, start: SrcToken, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+        let start_loc = src.token_to_location(start);
+        self.defined_at.insert(start_loc.clone());
         self.data.add_from_cpp(start, src)?;
-
-        macro_rules! err {
-            ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
-            };
-        }
 
         macro_rules! expect_token { () => {
             src.next_token().ok_or_else(||{
-                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
-                err!("expected `}}` to end enum before end of file")
+                let msg = format!("expected `}}` to end `{} {}` before end of file", self.category, self.id);
+                warning!(at: &start_loc.path, line: start_loc.line_no_or_0(), column: start_loc.col_no_or_0(), "{}", msg);
+                self.issues.push(Issue::new(start_loc.clone(), msg));
             })?
         }}
 
@@ -143,17 +150,28 @@ impl AggregateData {
     /// *   Any trailing names for struct typedefs or instances
     /// *   The closing `;` of the struct
     ///
-    pub(crate) fn add_from_cpp<'src>(&mut self, start: &Location, src: &'src mut SrcReader) -> Result<(), ()> {
-        macro_rules! err {
-            ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
-            };
+    pub(crate) fn add_from_cpp<'src>(&mut self, start: SrcToken, src: &'src mut SrcReader) -> Result<(), ()> {
+        let category = self.category;
+
+        macro_rules! issue {
+            ( $token:expr, warn, $($tt:tt)* ) => {{
+                let token = $token;
+                let loc = src.token_to_location(token);
+                let msg = format!($($tt)*);
+                warning!(at: &loc.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), $($tt)*);
+                self.issues.push(Issue::new(loc, msg));
+            }};
+            ( $token:expr, log, $($tt:tt)* ) => {{
+                let token = $token;
+                let loc = src.token_to_location(token);
+                let msg = format!($($tt)*);
+                self.issues.push(Issue::new(loc, msg));
+            }};
         }
 
         macro_rules! expect_token { () => {
             src.next_token().ok_or_else(||{
-                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
-                err!("expected `}}` to end enum before end of file")
+                issue!(start, warn, "expected `}}` to end `{} {}` before end of file", category, start);
             })?
         }}
 
@@ -162,24 +180,27 @@ impl AggregateData {
             while token == "#" {
                 let rest_of_line = src.next_line();
                 let rest_of_line = rest_of_line.as_ref().map_or("", |l| &**l);
-                self.issues.push(Issue::new(
-                    src.token_to_location(token),
-                    format!("preprocessor command inside `struct {{ ... }}` not supported: #{}", rest_of_line)
-                ));
+                issue!(token, log, "preprocessor command inside `{} {{ ... }}` not supported: #{}", self.category, rest_of_line);
                 token = expect_token!();
             }
 
+            let token_pos = src.position();
             match &*token {
                 "}" => break 'struct_,
-                "enum" | "struct" | "union" => {
-                    let name_or_brace = expect_token!();
-                    if name_or_brace != "{" {
-                        let _name = expect_token!();
+                "public" | "protected" | "private" => {
+                    let colon = expect_token!();
+                    if colon == ":" {
+                        issue!(colon, log, "access specifiers (`{}:`) not yet supported", token);
+                    } else {
+                        issue!(colon, warn, "expected `:` after access specifier `{}`, got `{}` instead", token, colon);
                     }
+                },
+                "enum" => {
+                    let name_or_brace = expect_token!();
+                    let _brace = if name_or_brace == "{" { name_or_brace } else { expect_token!() };
 
-                    let mut agg = AggregateData::default();
-                    agg.category = AggregateCategory::from_str(&*token).unwrap();
-                    let _ = agg.add_from_cpp(&src.token_to_location(token), src);
+                    let mut enum_ = EnumData::default();
+                    let _ = enum_.add_from_cpp(token, src);
 
                     // field_name ;
                     let semi_or_name = expect_token!();
@@ -191,14 +212,63 @@ impl AggregateData {
 
                     if semi == ";" {
                         let name = field_name.as_ref().map_or(Ident::from(""), |field_name| Ident::own(&**field_name));
-                        self.fields.insert(name.clone(), Field::new_agg(agg, name));
+                        self.fields.insert(name.clone(), Field::new_enum(enum_, name));
                         continue 'struct_
                     } else {
                         let field_name = field_name.as_ref().unwrap();
-                        let loc = src.token_to_location(semi);
-                        warning!(at: &start.path, line: loc.line_no_or_0(), column: loc.col_no_or_0(), "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
-                        self.issues.push(Issue::new(loc, format!("expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi)));
+                        issue!(semi, warn, "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
                         while expect_token!() != ";" {}
+                    }
+                },
+                "class" | "struct" | "interface" | "union" => {
+                    //      struct      { ... }         field;
+                    // or:  struct name { ... }         field;
+                    // or:  struct name                 field;
+                    // or:  struct name const * const   field;
+
+                    let name_or_brace = expect_token!();
+                    let agg_start = if name_or_brace == "{" {
+                        // parsed:  struct {
+                        Some(token)
+                    } else {
+                        // parsed:  struct name
+                        let field_or_brace_or_morety = expect_token!();
+                        if field_or_brace_or_morety == "{" {
+                            // parsed:  struct name {
+                            Some(name_or_brace)
+                        } else {
+                            // parsed:  struct name field
+                            // or:      struct name const
+                            // or:      struct name *
+                            src.set_position(token_pos); // Awkwardly reset src pos before `struct` keyword
+                            None
+                        }
+                    };
+
+                    if let Some(agg_start) = agg_start {
+                        // parsed:  struct name {
+                        // or:      struct {
+                        let mut agg = AggregateData::default();
+                        agg.category = AggregateCategory::from_str(&*token).unwrap();
+                        let _ = agg.add_from_cpp(agg_start, src);
+
+                        // field_name ;
+                        let semi_or_name = expect_token!();
+                        let (field_name, semi) = if semi_or_name == ";" {
+                            (None, semi_or_name)
+                        } else {
+                            (Some(semi_or_name), expect_token!())
+                        };
+
+                        if semi == ";" {
+                            let name = field_name.as_ref().map_or(Ident::from(""), |field_name| Ident::own(&**field_name));
+                            self.fields.insert(name.clone(), Field::new_agg(agg, name));
+                            continue 'struct_
+                        } else {
+                            let field_name = field_name.as_ref().unwrap();
+                            issue!(semi, warn, "expected `field_name ;` after sub-{}, instead got `{} {}`", token, field_name, semi);
+                            while expect_token!() != ";" {}
+                        }
                     }
                 },
                 _ => {},
@@ -208,24 +278,49 @@ impl AggregateData {
             // as:      ty    ty  ty ty     name;
             let mut ty = String::new();
             let mut possible_name = token;
+            let mut braces = 0;
             loop {
                 let token = expect_token!();
-                if token == ";" {
-                    let name = Ident::own(&*possible_name);
-                    self.fields.insert(name.clone(), Field::new(ty, name));
-                    continue 'struct_
-                } else if token == ":" {
-                    let ty = Ident::from(ty);
-                    let name = Ident::own(&*possible_name);
-                    let f = self.fields.entry(name.clone()).or_insert_with(move || Field::new(ty, name));
-                    f.bits = expect_token!().parse::<u32>().map_or(None, NonZeroU32::new);
-                    if f.bits.is_none() { err!("struct contains invalid bitsets"); }
-                    while expect_token!() != ";" {}
-                    continue 'struct_
-                } else {
-                    if !ty.is_empty() { ty.push(' ') }
-                    ty.push_str(&*possible_name);
-                    possible_name = token;
+                match &*token {
+                    ";" if braces == 0 => {
+                        let name = Ident::own(&*possible_name);
+                        self.fields.insert(name.clone(), Field::new(ty, name));
+                        continue 'struct_
+                    },
+                    ":" => {
+                        let ty = Ident::from(ty);
+                        let name = Ident::own(&*possible_name);
+                        let f = self.fields.entry(name.clone()).or_insert_with(move || Field::new(ty, name));
+                        let bits = expect_token!();
+                        f.bits = bits.parse::<u32>().map_or(None, NonZeroU32::new);
+                        if f.bits.is_none() { issue!(bits, warn, "{} {} contains invalid bitset `: {}`", self.category, start, bits); }
+                        while expect_token!() != ";" {}
+                        continue 'struct_
+                    },
+                    // "enum" => { ... },
+                    // "class" | "struct" | "interface" | "union" => { ... },
+                    "{" => {
+                        if !ty.is_empty() { ty.push(' ') }
+                        ty.push_str(&*possible_name); // wasn't a name
+                        possible_name = token;
+                        braces += 1;
+                    },
+                    "}" => {
+                        if braces > 0 {
+                            if !ty.is_empty() { ty.push(' ') }
+                            ty.push_str(&*possible_name); // wasn't a name
+                            possible_name = token;
+                            braces -= 1;
+                        } else {
+                            issue!(token, warn, "expected `field_name ;` before end of `{} {}`", self.category, start);
+                            break 'struct_
+                        }
+                    },
+                    _ => {
+                        if !ty.is_empty() { ty.push(' ') }
+                        ty.push_str(&*possible_name); // wasn't a name
+                        possible_name = token;
+                    },
                 }
             }
         }

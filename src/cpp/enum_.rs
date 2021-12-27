@@ -44,20 +44,16 @@ impl Enum {
     /// *   Any trailing names for enum typedefs or instances
     /// *   The closing `;` of the enum
     ///
-    pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
-        self.defined_at.insert(start.clone());
+    pub(crate) fn add_from_cpp(&mut self, start: SrcToken, src: &mut SrcReader, typedef: bool) -> Result<(), ()> {
+        let start_loc = src.token_to_location(start);
+        self.defined_at.insert(start_loc.clone());
         self.data.add_from_cpp(start, src)?;
-
-        macro_rules! err {
-            ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
-            };
-        }
 
         macro_rules! expect_token { () => {
             src.next_token().ok_or_else(||{
-                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
-                err!("expected `}}` to end enum before end of file")
+                let msg = "expected `}}` to end enum before end of file";
+                warning!(at: &start_loc.path, line: start_loc.line_no_or_0(), column: start_loc.col_no_or_0(), "{}", msg);
+                self.issues.push(Issue::new(start_loc.clone(), "expected `}}` to end enum before end of file"));
             })?
         }}
 
@@ -104,17 +100,14 @@ impl EnumData {
     /// *   Any trailing names for enum typedefs or instances
     /// *   The closing `;` of the enum
     ///
-    pub(crate) fn add_from_cpp(&mut self, start: &Location, src: &mut SrcReader) -> Result<(), ()> {
-        macro_rules! err {
-            ( $($tt:tt)* ) => {
-                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), $($tt)*)
-            };
-        }
+    pub(crate) fn add_from_cpp(&mut self, start: SrcToken, src: &mut SrcReader) -> Result<(), ()> {
+        let start = src.token_to_location(start);
 
         macro_rules! expect_token { () => {
             src.next_token().ok_or_else(||{
-                self.issues.push(Issue::new(start.clone(), "expected `}}` to end enum before end of file"));
-                err!("expected `}}` to end enum before end of file")
+                let msg = "expected `}}` to end enum before end of file";
+                warning!(at: &start.path, line: start.line_no_or_0(), column: start.col_no_or_0(), "{}", msg);
+                self.issues.push(Issue::new(start.clone(), msg));
             })?
         }}
 

@@ -54,6 +54,8 @@ impl<'t> SrcReader<'t> {
         }
     }
 
+    pub fn position(&self) -> usize { self.cursor }
+    pub fn set_position(&mut self, cursor: usize) { self.cursor = cursor }
     pub fn reset(&mut self) { self.cursor = 0; }
 
     pub fn next_line(&mut self) -> Option<SrcLine<'t>> {

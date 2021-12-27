@@ -7,7 +7,7 @@ use crate::*;
 pub enum Type {
     Basic(Ident),
     Aggregate(AggregateData),
-    //AnonymousEnum(EnumData),
+    Enum(EnumData),
 }
 
 impl Debug for Type {
@@ -15,6 +15,7 @@ impl Debug for Type {
         match self {
             Type::Basic(id) => Debug::fmt(id, fmt),
             Type::Aggregate(agg) => Debug::fmt(agg, fmt),
+            Type::Enum(e) => Debug::fmt(e, fmt),
         }
     }
 }
