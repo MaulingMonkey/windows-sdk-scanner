@@ -92,6 +92,22 @@ impl<K: Debug, V: Debug> Debug for VecMap<K, V> {
     }
 }
 
+impl<K: Ord, V> Extend<(K, V)> for VecMap<K, V> {
+    fn extend<T: IntoIterator<Item = (K, V)>>(&mut self, iter: T) {
+        for (k, v) in iter.into_iter() {
+            let _ = self.insert(k, v);
+        }
+    }
+}
+
+impl<K: Ord, V> FromIterator<(K, V)> for VecMap<K, V> {
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        let mut v = Self::default();
+        v.extend(iter);
+        v
+    }
+}
+
 
 
 pub mod vec_map {

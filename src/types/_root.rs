@@ -2,6 +2,7 @@ use crate::*;
 
 use mmrbi::*;
 
+use std::collections::*;
 use std::fmt::{self, Debug, Formatter};
 use std::io;
 use std::path::*;
@@ -49,7 +50,8 @@ impl Root {
 
     /// Mark inherited methods etc.
     pub(crate) fn cleanup(&mut self) {
-        self.cleanup_inherited_methods()
+        self.cleanup_inherited_methods();
+        self.cleanup_macro_methods();
     }
 
     #[inline] pub(crate) fn add_from_cpp_path(&mut self, path: impl AsRef<Path>) -> io::Result<()> {
@@ -66,6 +68,27 @@ impl Root {
                 next_base = &base.base;
             }
         }
+    }
+
+    fn cleanup_macro_methods(&mut self) {
+        let macros = std::mem::replace(&mut self.macros, VecMap::default());
+        let mut macros = macros.iter_by_key().collect::<HashMap<_, _>>();
+        for interface in self.interfaces.values_by_key() {
+            let root_interface = interface;
+            let mut next_interface = Some(interface);
+            while let Some(interface) = next_interface {
+                for method in interface.methods() {
+                    for postfix in ["", "A", "W"].iter().copied() {
+                        if let Some(root_interface) = root_interface.id.strip_suffix(postfix) {
+                            let possible_macro = format!("{}_{}", root_interface, method.f.id.as_str());
+                            macros.remove(&Ident::from(possible_macro));
+                        }
+                    }
+                }
+                next_interface = interface.base.as_ref().and_then(|base| self.interfaces.get(base));
+            }
+        }
+        self.macros = macros.into_iter().map(|(k, v)| (k.clone(), v.clone())).collect::<VecMap<_, _>>();
     }
 
     fn impl_add_from_cpp_path(&mut self, path: &Path) -> io::Result<()> {
@@ -192,8 +215,26 @@ impl Root {
             let unexpected_eof  = |e| unexpected_eof(&line.location, e);
             let warn_expected   = |e| warn_expected(&line.location, e);
 
-            if let Some(_pp) = line.trimmed.strip_prefix("#") {
+            if let Some(pp) = line.trimmed.strip_prefix("#") {
                 // Preprocessor command (#ifdef, #if, #else, #endif, #define, #include, etc.)
+                let pp = pp.trim_start();
+                if let Some(define) = pp.strip_prefix("define ") {
+                    let define = define.trim_start();
+                    if let Some(end_of_ident) = define.find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')) {
+                        let (ident, rest) = define.split_at(end_of_ident);
+                        if rest.starts_with('(') { // macro ala #define FOO(...
+                            self.add_macro(&line.location, Macro { id: Ident::own(ident), _non_exhaustive: () });
+                        } else if rest.trim().is_empty() { // empty
+                            // ...
+                        } else if rest.chars().next().unwrap_or('\0').is_ascii_whitespace() { // constant? ala #define FOO ...
+                            // TODO: separate constant #define s from type aliases? Or is that too complicated? Rename?
+                            self.add_constant(&line.location, Constant { id: Ident::own(ident), _non_exhaustive: () });
+                        } else { // syntax error?
+                            // ...
+                        }
+                    }
+                }
+                // else #ifdef, #if, #else, #endif, #include, ...
             } else if let Some(_cpp_comment) = line.trimmed.strip_prefix("//") {
                 // C++ style single line comment
             } else if let Some(interface) = line.trimmed.strip_prefix_suffix("DECLARE_INTERFACE(", ")") {
@@ -319,6 +360,26 @@ impl Root {
             vec_map::Entry::Occupied(entry) => {
                 let _prev = entry.get();
                 // TODO: values, abi?
+            },
+        }
+    }
+
+    fn add_macro(&mut self, _loc: &Location, m: Macro) {
+        match self.macros.entry(m.id.clone()) {
+            vec_map::Entry::Vacant(entry) => drop(entry.insert(m)),
+            vec_map::Entry::Occupied(entry) => {
+                let _prev = entry.get();
+                // TODO: variations etc?
+            },
+        }
+    }
+
+    fn add_constant(&mut self, _loc: &Location, c: Constant) {
+        match self.constants.entry(c.id.clone()) {
+            vec_map::Entry::Vacant(entry) => drop(entry.insert(c)),
+            vec_map::Entry::Occupied(entry) => {
+                let _prev = entry.get();
+                // TODO: variations etc?
             },
         }
     }
