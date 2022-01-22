@@ -223,12 +223,12 @@ impl Root {
                     if let Some(end_of_ident) = define.find(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_')) {
                         let (ident, rest) = define.split_at(end_of_ident);
                         if rest.starts_with('(') { // macro ala #define FOO(...
-                            self.add_macro(&line.location, Macro { id: Ident::own(ident), _non_exhaustive: () });
+                            self.add_macro(&line.location, Macro::new(Ident::own(ident)));
                         } else if rest.trim().is_empty() { // empty
                             // ...
                         } else if rest.chars().next().unwrap_or('\0').is_ascii_whitespace() { // constant? ala #define FOO ...
                             // TODO: separate constant #define s from type aliases? Or is that too complicated? Rename?
-                            self.add_constant(&line.location, Constant { id: Ident::own(ident), _non_exhaustive: () });
+                            self.add_constant(&line.location, Constant::new(Ident::own(ident)));
                         } else { // syntax error?
                             // ...
                         }
@@ -364,22 +364,30 @@ impl Root {
         }
     }
 
-    fn add_macro(&mut self, _loc: &Location, m: Macro) {
+    fn add_macro(&mut self, loc: &Location, mut m: Macro) {
         match self.macros.entry(m.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(m)),
-            vec_map::Entry::Occupied(entry) => {
-                let _prev = entry.get();
+            vec_map::Entry::Vacant(entry) => {
+                m.defined_at.insert(loc.clone());
+                drop(entry.insert(m));
+            },
+            vec_map::Entry::Occupied(mut entry) => {
+                let prev = entry.get_mut();
                 // TODO: variations etc?
+                prev.defined_at.insert(loc.clone());
             },
         }
     }
 
-    fn add_constant(&mut self, _loc: &Location, c: Constant) {
+    fn add_constant(&mut self, loc: &Location, mut c: Constant) {
         match self.constants.entry(c.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(c)),
-            vec_map::Entry::Occupied(entry) => {
-                let _prev = entry.get();
+            vec_map::Entry::Vacant(entry) => {
+                c.defined_at.insert(loc.clone());
+                drop(entry.insert(c));
+            },
+            vec_map::Entry::Occupied(mut entry) => {
+                let prev = entry.get_mut();
                 // TODO: variations etc?
+                prev.defined_at.insert(loc.clone());
             },
         }
     }
