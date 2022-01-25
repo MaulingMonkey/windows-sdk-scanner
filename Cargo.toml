@@ -11,6 +11,6 @@ readme                  = "Readme.md"
 path                    = "src/_lib.rs"
 
 [dependencies]
-mmrbi                   = "0.0.17"
 abibool                 = "0.5"
 abistr                  = "0.1"
+mmrbi                   = "0.0.17"
