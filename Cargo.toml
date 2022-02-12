@@ -13,4 +13,7 @@ path                    = "src/_lib.rs"
 [dependencies]
 abibool                 = "0.5"
 abistr                  = "0.1"
+clang.version           = "1.0.3"
+clang.features          = ["clang_10_0", "runtime"]
+lazy_static             = "1"
 mmrbi                   = "0.0.17"

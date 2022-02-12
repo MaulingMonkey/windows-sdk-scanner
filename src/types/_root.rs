@@ -92,6 +92,124 @@ impl Root {
     }
 
     fn impl_add_from_cpp_path(&mut self, path: &Path) -> io::Result<()> {
+        {
+            lazy_static::lazy_static! {
+                static ref CLANG : Mutex<fn() -> clang::Clang> = Mutex::new(|| clang::Clang::new().unwrap());
+            }
+
+            let clang = CLANG.lock().unwrap();
+            let clang = clang();
+            let index = clang::Index::new(&clang, true, false);
+            let mut parser = index.parser(path);
+            let tu = parser
+                .cache_completion_results(false)
+                .detailed_preprocessing_record(true)        // for macros?
+                .skip_function_bodies(true)                 // nah
+                .keep_going(true)                           // continue on errors
+                .single_file_parse(true)
+                .include_attributed_types(true)             // ?
+                .visit_implicit_attributes(true)            // ?
+                .retain_excluded_conditional_blocks(true)   // sure
+                .arguments(&[
+                    "-xc++", // force C++
+                    //"-std=c++20",
+                    //"-D_WIN32_WINNT=0x0602",
+
+                    // MS COM Interface Nonsense
+                    "-fms-extensions",
+                    "-Dinterface=__interface",
+                    "-DDECLARE_INTERFACE_(x,y)=interface x : y",
+                    "-DDECLARE_INTERFACE(x)=interface x",
+                    "-DSTDMETHOD_(result, method)=virtual result STDMETHODCALLTYPE method",
+                    "-DSTDMETHOD(method)=virtual HRESULT STDMETHODCALLTYPE method",
+                    "-DSTDMETHODCALLTYPE=__stdcall",
+                    "-DTHIS_=",
+                    "-DPURE== 0",
+
+                    // Types
+                    "-DUINT32=unsigned int",
+                    "-DUINT64=unsigned long long",
+                    "-DBOOL=unsigned",
+                    "-DBYTE=unsigned char",
+                    "-DUINT=unsigned int",
+                    "-DDWORD=unsigned int",
+
+                    // SAL
+                    "-D_Out_",
+                    "-D_In_",
+                    "-D_In_opt_",
+                    "-D_In_reads_bytes_(x)",
+                    "-D_Out_writes_bytes_(x)",
+                ])
+                .parse()
+                .unwrap();
+
+            if false {
+                for diag in tu.get_diagnostics() {
+                    let sev     = diag.get_severity();
+                    let loc     = diag.get_location().get_file_location();
+                    let text    = diag.get_text();
+
+                    let file    = loc.file.as_ref().map_or(PathBuf::new(), |f| f.get_path());
+                    let line    = loc.line as _;
+                    let column  = loc.column as _;
+
+                    use clang::diagnostic::Severity;
+                    match sev {
+                        Severity::Fatal     => error!(at: &file, line: line, column: column, "{}", text),
+                        Severity::Error     => error!(at: &file, line: line, column: column, "{}", text),
+                        Severity::Warning   => warning!(at: &file, line: line, column: column, "{}", text),
+                        Severity::Note      => info!(at: &file, line: line, column: column, "{}", text),
+                        Severity::Ignored   => {},
+                    }
+                }
+            }
+
+            fn dump_entity(indent: usize, e: clang::Entity) {
+                let name = e.get_display_name().unwrap_or_default();
+                let kind = e.get_kind();
+
+                use clang::EntityKind;
+                if matches!(kind, EntityKind::InclusionDirective | EntityKind::MacroExpansion | EntityKind::UnexposedAttr) { return }
+                //if matches!(kind, EntityKind::ParmDecl) { return }
+
+                let mut banned_prefixes = "__ _CPP _HAS_ _MSC _M_".split(' ');
+                let mut banned_suffixes = "__ _DEFINED _SUPPORTED Vtbl".split(' ');
+
+                if banned_prefixes.any(|pre| name.starts_with(pre)) { return }
+                if banned_suffixes.any(|post| name.ends_with(post)) { return }
+                //if name.is_empty() { return }
+
+                if true {
+                    let name = if name.is_empty() { "\"\"" } else { name.as_str() };
+                    let col2 = 80; // - indent*2/4;
+                    let is_interface
+                        =   matches!(kind, EntityKind::StructDecl | EntityKind::ClassDecl)
+                        &&  e.get_pretty_printer().set_flag(clang::PrintingPolicyFlag::UseTerseOutput, true).print().starts_with("__interface")
+                        ;
+                    if is_interface {
+                        eprintln!("{: >indent$}{: <col2$} interface", "", name);
+                    } else {
+                        eprintln!("{: >indent$}{: <col2$} EntityKind::{:?}", "", name, kind);
+                    }
+                } else {
+                    eprintln!("{: >indent$}{}", "", e.get_pretty_printer().print().replace("\n", &format!("\n{: >indent$}", "")));
+                    return;
+                }
+
+                for child in e.get_children() {
+                    dump_entity(indent+2, child);
+                }
+            }
+
+            for e in tu.get_entity().get_children() {
+                dump_entity(0, e);
+            }
+            dbg!(tu.get_target().triple); // e.g. "x86_64-pc-windows-msvc19.30.30706"
+            dbg!(tu.get_target().pointer_width); // e.g. 64
+        }
+        if !cfg!(nope) { panic!() }
+
         let path = Arc::from(path);
         let all = std::fs::read_to_string(&path)?;
         let mut src = SrcReader::new(path.clone(), &all);
