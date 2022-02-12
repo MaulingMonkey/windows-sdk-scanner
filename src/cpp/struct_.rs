@@ -120,12 +120,19 @@ impl Aggregate {
         }
         if !expr.is_empty() { exprs.push(expr) }
 
-        // given `typedef struct _ID { ... } ID;`, drop `_ID` in favor of `ID`
-        let id_trim = self.id.trim_start_matches('_').trim_end_matches('_');
-        for expr in exprs.into_iter() {
-            if typedef && expr == id_trim {
-                self.id = Ident::from(expr);
-                break;
+        if typedef {
+            let id_trim = self.id.trim_start_matches('_').trim_end_matches('_');    // given `typedef struct   _ID { ... } ID;`, drop   `_ID` in favor of `ID`
+            let tag_id = self.id.strip_prefix("tag");                               // given `typedef struct tagID { ... } ID;`, drop `tagID` in favor of `ID`
+
+            for expr in exprs.into_iter() {
+                if expr == id_trim {
+                    self.id = Ident::from(expr);
+                    break;
+                }
+                if Some(&*expr) == tag_id {
+                    self.id = Ident::from(expr);
+                    break;
+                }
             }
         }
 
