@@ -51,7 +51,9 @@ impl RootBuilder {
 
         for header in [
             // misc
+            r"shared\guiddef.h",
             r"um\unknwnbase.h",
+            r"um\winuser.h",
 
             // d3d
             r"um\d3dcaps.h",
