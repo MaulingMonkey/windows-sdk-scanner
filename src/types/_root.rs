@@ -346,7 +346,9 @@ impl Root {
             AggregateCategory::Union        => &mut self.unions,
         };
         match agg.entry(a.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(a)),
+            vec_map::Entry::Vacant(entry) => {
+                entry.insert(a);
+            },
             vec_map::Entry::Occupied(entry) => {
                 let _prev = entry.get();
                 // TODO: fields, layout?
@@ -356,7 +358,9 @@ impl Root {
 
     fn add_enum(&mut self, _loc: &Location, e: Enum) {
         match self.enums.entry(e.id.clone()) {
-            vec_map::Entry::Vacant(entry) => drop(entry.insert(e)),
+            vec_map::Entry::Vacant(entry) => {
+                entry.insert(e);
+            },
             vec_map::Entry::Occupied(entry) => {
                 let _prev = entry.get();
                 // TODO: values, abi?
@@ -368,7 +372,7 @@ impl Root {
         match self.macros.entry(m.id.clone()) {
             vec_map::Entry::Vacant(entry) => {
                 m.defined_at.insert(loc.clone());
-                drop(entry.insert(m));
+                entry.insert(m);
             },
             vec_map::Entry::Occupied(mut entry) => {
                 let prev = entry.get_mut();
@@ -382,7 +386,7 @@ impl Root {
         match self.constants.entry(c.id.clone()) {
             vec_map::Entry::Vacant(entry) => {
                 c.defined_at.insert(loc.clone());
-                drop(entry.insert(c));
+                entry.insert(c);
             },
             vec_map::Entry::Occupied(mut entry) => {
                 let prev = entry.get_mut();
